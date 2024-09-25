@@ -26,8 +26,6 @@ class Position {
 public class Main {
     private static int N, M, K;
     private static int[][] topMap;
-    private static int cnt; // 살아있는 포탑 개수
-
     // 우 / 하 / 좌 / 상
     private static int[] dx4 = {0, 1, 0, -1};
     private static int[] dy4 = {1, 0, -1, 0};
@@ -42,43 +40,58 @@ public class Main {
                     .thenComparingInt(p -> -p.attackTime)
                     .thenComparingInt(p -> -(p.x + p.y))
                     .thenComparingInt(p -> -p.y)
-    );
+    );;
     private static PriorityQueue<Position> targetPrior = new PriorityQueue<>(
             Comparator.comparingInt((Position p) -> -topMap[p.x][p.y])
                     .thenComparingInt(p -> p.attackTime)
                     .thenComparingInt(p -> p.x + p.y)
                     .thenComparingInt(p -> p.y)
     );
-
     public static void main(String[] args) throws IOException{
         // 0. 입력받기
         input();
 
         // 1. 구현
-
-        while (K-- > 0) {
+        for (int k = 0; k < K; k++) {
             // <종료 조건>
             // 포탑의 개수가 1개이면 종료
-            if (cnt == 1) {
+            if (attackerPrior.size() <= 1) {
                 break;
             }
 
-            // 1) 공격자 선정
-            // 공격자 위치 저장
-            int[] attacker = selsectAttacker();
-
-            // 2) 공격 대상 선정
-            // 공격 대상 우선순위 큐에서 추출
-            Position priorTarget = targetPrior.peek();
-            // 공격 대상 위치 저장
-            int[] target = {priorTarget.x, priorTarget.y};
 
             // # 공격 전의 배열 저장
             for (int i = 0; i < N; i++) {
                 for (int j = 0; j < M; j++) {
                     previousMap[i][j] = topMap[i][j];
+
                 }
             }
+
+            // 1) 공격자 선정
+            // 공격자 위치 저장
+            Position attackPosition = attackerPrior.peek();
+
+            // 공격자 공격력 +(N+M)
+            topMap[attackPosition.x][attackPosition.y] += (N + M);
+
+            // 공격시점 저장
+            attackPosition.attackTime = k + 1;
+
+            int[] attacker = {attackPosition.x, attackPosition.y};
+
+            // 공격 대상 큐에도 공격 시점 저장
+            for (Position position : targetPrior) {
+                if (position.x == attackPosition.x && position.y == attackPosition.y) {
+                    position.attackTime = k + 1;
+                }
+            }
+
+            // 2) 공격 대상 선정
+            // 공격 대상 우선순위 큐에서 추출
+            Position targetPosition = targetPrior.peek();
+            // 공격 대상 위치 저장
+            int[] target = {targetPosition.x, targetPosition.y};
 
             // 3-1) 레이저 공격
             if (!laser(attacker, target)) {
@@ -92,7 +105,7 @@ public class Main {
             for (int i = 0; i < N; i++) {
                 for (int j = 0; j < M; j++) {
                     // 공격력이 줄어들지 않았고, 공격자가 아닐 때
-                    if (topMap[i][j] != 0
+                    if (topMap[i][j] > 0
                             && previousMap[i][j] == topMap[i][j]
                             && !(i == attacker[0] && j == attacker[1])) {
                         topMap[i][j] += 1;
@@ -100,13 +113,18 @@ public class Main {
                 }
             }
 
+            // 부서진 포탑 제거
+            attackerPrior.removeIf(item -> topMap[item.x][item.y] <= 0);
+            targetPrior.removeIf(item -> topMap[item.x][item.y] <= 0);
+
+
         }
 
         // 2. 출력
         int ans = 0;
         for (int i = 0; i < N; i++) {
             for (int j = 0; j < M; j++) {
-                if (topMap[i][j] != 0) {
+                if (topMap[i][j] > 0) {
                     ans = Math.max(ans, topMap[i][j]);
                 }
             }
@@ -115,18 +133,6 @@ public class Main {
 
     }
 
-    private static int[] selsectAttacker() {
-        // 공격자 선정 우선순위 큐에서 추출
-        Position attacker = attackerPrior.peek();
-
-        // 공격자 공격력 +(N+M)
-        topMap[attacker.x][attacker.y] += (N + M);
-
-        // 공격시점 저장
-        attacker.attackTime = K + 1;
-
-        return new int[]{attacker.x, attacker.y};
-    }
 
     private static boolean laser(int[] attacker, int[] target) {
         int ax = attacker[0];   int ay = attacker[1];
@@ -134,13 +140,13 @@ public class Main {
 
         Queue<Position> queue = new LinkedList<>();
         boolean[][] visited = new boolean[N][M];
-        queue.add(new Position(ax,ay,0,null ));
+        visited[ax][ay] = true;
+        queue.add(new Position(ax,ay,0,null));
         while (!queue.isEmpty()) {
             Position current = queue.poll();
 
             // 공격 대상에 도착하면
             if (current.x == tx && current.y == ty) {
-
                 // 공격 대상의 공격력 업데이트
                 topMap[tx][ty] -= topMap[ax][ay];
 
@@ -181,7 +187,7 @@ public class Main {
                 }
 
                 // 부서진 탑이 있는 곳 or 이미 방문한 곳 -> 가지 않음
-                if (topMap[nx][ny] == 0 || visited[nx][ny]) {
+                if (topMap[nx][ny] <= 0 || visited[nx][ny]) {
                     continue;
                 }
 
@@ -220,7 +226,7 @@ public class Main {
             }
 
             // 탑이 부서진 곳이 아니고, 공격자의 위치가 아니면 공격력 업데이트
-            if (topMap[nx][ny] > 0 && nx != ax && ny != ay) {
+            if (topMap[nx][ny] > 0 && !(nx == ax && ny == ay)) {
                 topMap[nx][ny] -= (topMap[ax][ay] / 2);
             }
         }
@@ -242,7 +248,6 @@ public class Main {
             for (int j = 0; j < M; j++) {
                 topMap[i][j] = Integer.parseInt(st.nextToken());
                 if (topMap[i][j] > 0) {
-                    cnt++;
                     attackerPrior.add(new Position(i, j, 0));
                     targetPrior.add(new Position(i, j, 0));
                 }
